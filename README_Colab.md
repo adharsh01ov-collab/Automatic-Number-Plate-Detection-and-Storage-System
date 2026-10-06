@@ -1,6 +1,6 @@
-# 🚘 Automatic Number Plate Recognition (ANPR)
+#  Automatic Number Plate Recognition (ANPR)
 
-## 📌 Project Overview
+##  Project Overview
 
 The **Automatic Number Plate Recognition (ANPR)** system is a computer-vision-based application designed to detect and recognize vehicle license plates from images.
 
@@ -17,7 +17,7 @@ The system accepts a vehicle image as input, processes the image using computer 
 
 ---
 
-# 🎯 Objectives
+#  Objectives
 
 The main objectives of this project are:
 
@@ -31,7 +31,7 @@ The main objectives of this project are:
 
 ---
 
-# 🛠️ Technologies Used
+#  Technologies Used
 
 | Technology | Purpose |
 |---|---|
@@ -46,7 +46,7 @@ The main objectives of this project are:
 
 ---
 
-# 🧠 System Architecture
+#  System Architecture
 
 ```text
                  INPUT
@@ -93,7 +93,7 @@ The main objectives of this project are:
 
 ---
 
-# ⚙️ Working Principle
+#  Working Principle
 
 ## 1. Image Upload
 
@@ -134,7 +134,7 @@ This reduces noise while attempting to preserve important edges.
 
 ---
 
-# 🔍 3. Edge Detection
+#  3. Edge Detection
 
 Canny edge detection is applied to identify strong boundaries in the image.
 
@@ -146,7 +146,7 @@ Edges can represent the boundaries of objects, including potential license-plate
 
 ---
 
-# 🔲 4. Contour Detection
+#  4. Contour Detection
 
 Contours are extracted from the edge image:
 
@@ -162,7 +162,7 @@ The contours are sorted based on their area so that larger candidate regions can
 
 ---
 
-# 📐 5. Plate Region Identification
+#  5. Plate Region Identification
 
 Potential plate regions are filtered using geometric characteristics such as:
 
@@ -183,7 +183,7 @@ This helps eliminate many regions that are unlikely to represent a number plate.
 
 ---
 
-# 🔤 6. OCR Processing
+#  6. OCR Processing
 
 The selected region of interest is enhanced before OCR.
 
@@ -217,7 +217,7 @@ The OCR output is then cleaned so that only alphanumeric characters remain.
 
 ---
 
-# 🧹 7. OCR Output Cleaning
+#  7. OCR Output Cleaning
 
 The recognized text is converted to uppercase and unwanted characters are removed.
 
@@ -232,7 +232,7 @@ This produces a cleaner representation of the recognized plate number.
 
 ---
 
-# 💾 8. Data Storage
+#  8. Data Storage
 
 Once a plate number is obtained, the system records:
 
@@ -256,13 +256,13 @@ NumberPlateData.xlsx
 
 ---
 
-# 📊 Output
+#  Output
 
 ## Output 1 — Input Image
 
 **Description:** Original vehicle image uploaded to Google Colab.
 
-### 📷 Screenshot
+###  Screenshot
 
 > **Add your actual input-image screenshot here**
 
@@ -278,7 +278,7 @@ NumberPlateData.xlsx
 
 ---
 
-# 🔎 Output 2 — Detected Number Plate
+#  Output 2 — Detected Number Plate
 
 The system identifies a potential plate region and displays the detected plate number.
 
@@ -298,7 +298,7 @@ The system identifies a potential plate region and displays the detected plate n
 
 ---
 
-# 🔤 Output 3 — OCR Result
+#  Output 3 — OCR Result
 
 The recognized characters obtained from Tesseract OCR are displayed.
 
@@ -308,7 +308,7 @@ The recognized characters obtained from Tesseract OCR are displayed.
 Detected Plate: XXXXXXXX
 ```
 
-### 📷 Actual Output
+###  Actual Output
 
 > **Paste your real Colab output screenshot here**
 
@@ -322,7 +322,7 @@ Detected Plate: XXXXXXXX
 
 ---
 
-# 📋 Output 4 — Excel Database
+#  Output 4 — Excel Database
 
 The recognized plate number and timestamp are stored in an Excel file.
 
@@ -346,7 +346,7 @@ The recognized plate number and timestamp are stored in an Excel file.
 
 ---
 
-# 💻 Complete Program
+#  Complete Program
 
 ```python
 from IPython import get_ipython
@@ -473,7 +473,7 @@ else:
 
 ---
 
-# ▶️ How to Run in Google Colab
+#  How to Run in Google Colab
 
 ## Step 1 — Open Google Colab
 
@@ -515,7 +515,7 @@ If a plate is recognized, an Excel file will be generated and downloaded.
 
 ---
 
-# 📈 Results and Evaluation
+#  Results and Evaluation
 
 The system should be evaluated using different image conditions.
 
@@ -532,7 +532,7 @@ The system should be evaluated using different image conditions.
 
 ---
 
-# 📊 Performance Metrics
+#  Performance Metrics
 
 The following metrics can be calculated after testing:
 
@@ -564,7 +564,7 @@ Do not report estimated or assumed accuracy values.
 
 ---
 
-# ✅ Features
+#  Features
 
 - Image upload through Google Colab
 - Image resizing
@@ -581,7 +581,7 @@ Do not report estimated or assumed accuracy values.
 
 ---
 
-# ⚠️ Limitations
+#  Limitations
 
 The current implementation is a prototype and has several limitations:
 
@@ -595,7 +595,7 @@ The current implementation is a prototype and has several limitations:
 
 ---
 
-# 🚀 Future Improvements
+#  Future Improvements
 
 Future versions can improve the system by adding:
 
@@ -614,7 +614,7 @@ Future versions can improve the system by adding:
 
 ---
 
-# 🧪 Project Workflow
+#  Project Workflow
 
 ```text
              Vehicle Image
@@ -652,7 +652,7 @@ Future versions can improve the system by adding:
 
 ---
 
-# 📁 Project Structure
+#  Project Structure
 
 ```text
 ANPR/
@@ -674,7 +674,7 @@ ANPR/
 
 ---
 
-# 📚 Applications
+#  Applications
 
 The proposed system can be adapted for:
 
@@ -689,7 +689,7 @@ The proposed system can be adapted for:
 
 ---
 
-# 🎓 Learning Outcomes
+#  Learning Outcomes
 
 Through this project, the following technical concepts were applied:
 
@@ -707,7 +707,7 @@ Through this project, the following technical concepts were applied:
 
 ---
 
-# 🔮 Future System Architecture
+#  Future System Architecture
 
 ```text
               Camera / CCTV
@@ -737,7 +737,7 @@ Through this project, the following technical concepts were applied:
 
 ---
 
-# 👨‍💻 Project Information
+#  Project Information
 
 **Project:** Automatic Number Plate Recognition System
 
@@ -753,7 +753,7 @@ Through this project, the following technical concepts were applied:
 
 ---
 
-# 📌 Conclusion
+#  Conclusion
 
 The Automatic Number Plate Recognition system demonstrates the application of computer vision and Optical Character Recognition for automated vehicle number-plate recognition.
 
@@ -763,7 +763,7 @@ The current implementation provides a foundation for developing a more advanced 
 
 ---
 
-## ⭐ Project Status
+##  Project Status
 
 **Status:** Prototype / Development
 
@@ -771,7 +771,7 @@ The system has been implemented as a Google Colab-based proof of concept. Furthe
 
 ---
 
-## 📷 Final Demonstration
+##  Final Demonstration
 
 ### Input
 
