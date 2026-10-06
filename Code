@@ -1,0 +1,358 @@
+#!/usr/bin/env python3
+"""
+Autonomous Number Plate Recognition (ANPR) - detection, OCR and storage.
+
+Pipeline:  camera/video -> plate detection -> OCR -> cleanup/validation
+           -> multi-frame voting -> SQLite database + cropped plate images
+
+Install:   pip install -r requirements.txt
+
+Run:
+    python anpr.py                          # webcam 0, headless
+    python anpr.py --source 0 --show        # webcam with live preview
+    python anpr.py --source traffic.mp4     # video file
+    python anpr.py --source rtsp://...      # IP camera stream
+    python anpr.py --weights plate.pt       # use a YOLO plate model (more accurate)
+    python anpr.py --search TN09            # query stored records
+    python anpr.py --export plates.csv      # export database to CSV
+
+Press 'q' in the preview window (or Ctrl+C) to stop.
+"""
+
+import argparse
+import csv
+import logging
+import re
+import sqlite3
+import sys
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+log = logging.getLogger("anpr")
+
+# --------------------------------------------------------------------------- #
+# Plate text helpers (Indian formats: TN09BQ1234, KA01A1234, 22BH1234AA)
+# --------------------------------------------------------------------------- #
+STATE_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$")
+BH_RE = re.compile(r"^\d{2}BH\d{4}[A-Z]{1,2}$")
+
+TO_DIGIT = {"O": "0", "Q": "0", "D": "0", "I": "1", "L": "1", "Z": "2",
+            "S": "5", "B": "8", "G": "6", "T": "7"}
+TO_LETTER = {"0": "O", "1": "I", "2": "Z", "5": "S", "8": "B", "6": "G", "7": "T"}
+
+
+def clean_text(raw: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", raw.upper())
+
+
+def fix_positions(text: str) -> str:
+    """Correct common OCR confusions using the position rules of Indian plates:
+    chars 0-1 are letters, 2-3 digits, the last 4 digits, the middle letters."""
+    if not 8 <= len(text) <= 11 or BH_RE.match(text):
+        return text
+    out = []
+    n = len(text)
+    for i, ch in enumerate(text):
+        if i < 2 or 4 <= i < n - 4:      # letter positions
+            out.append(TO_LETTER.get(ch, ch))
+        else:                            # digit positions
+            out.append(TO_DIGIT.get(ch, ch))
+    return "".join(out)
+
+
+def is_valid(text: str) -> bool:
+    return bool(STATE_RE.match(text) or BH_RE.match(text))
+
+
+# --------------------------------------------------------------------------- #
+# Detection
+# --------------------------------------------------------------------------- #
+def iou(a, b) -> float:
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    x1, y1 = max(ax, bx), max(ay, by)
+    x2, y2 = min(ax + aw, bx + bw), min(ay + ah, by + bh)
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    union = aw * ah + bw * bh - inter
+    return inter / union if union else 0.0
+
+
+class PlateDetector:
+    """Finds plate-like rectangles. Uses a YOLO model if weights are given,
+    otherwise classical contour detection with a Haar cascade fallback."""
+
+    def __init__(self, weights=None, min_area=1500, max_plates=3):
+        self.min_area = min_area
+        self.max_plates = max_plates
+        self.model = None
+        if weights:
+            from ultralytics import YOLO  # lazy import, only needed here
+            self.model = YOLO(weights)
+        else:
+            path = cv2.data.haarcascades + "haarcascade_russian_plate_number.xml"
+            self.cascade = cv2.CascadeClassifier(path)
+
+    def detect(self, frame):
+        if self.model is not None:
+            boxes = self._yolo(frame)
+        else:
+            boxes = self._contours(frame)
+            if not boxes:
+                boxes = self._haar(frame)
+        return self._finalize(boxes, frame.shape)
+
+    def _yolo(self, frame):
+        res = self.model(frame, verbose=False)[0]
+        return [(int(x1), int(y1), int(x2 - x1), int(y2 - y1))
+                for x1, y1, x2, y2 in res.boxes.xyxy.tolist()]
+
+    def _contours(self, frame):
+        h, w = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.bilateralFilter(gray, 11, 17, 17)
+        edges = cv2.dilate(cv2.Canny(gray, 30, 200), None, iterations=1)
+        cnts, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:40]
+        boxes = []
+        for c in cnts:
+            approx = cv2.approxPolyDP(c, 0.02 * cv2.arcLength(c, True), True)
+            if len(approx) != 4:
+                continue
+            x, y, bw, bh = cv2.boundingRect(approx)
+            area, ar = bw * bh, bw / float(bh)
+            if area < self.min_area or area > 0.5 * w * h:
+                continue
+            if not 1.2 <= ar <= 6.0:     # 2-wheeler (~1.5) to car (~4-5) plates
+                continue
+            boxes.append((x, y, bw, bh))
+        return boxes
+
+    def _haar(self, frame):
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        found = self.cascade.detectMultiScale(gray, 1.1, 4, minSize=(60, 20))
+        return [tuple(int(v) for v in b) for b in found]
+
+    def _finalize(self, boxes, shape):
+        H, W = shape[:2]
+        kept = []
+        for b in boxes:
+            if all(iou(b, k) < 0.4 for k in kept):
+                x, y, bw, bh = b
+                x, y = max(0, x), max(0, y)
+                kept.append((x, y, min(bw, W - x), min(bh, H - y)))
+        return kept[: self.max_plates]
+
+
+# --------------------------------------------------------------------------- #
+# OCR
+# --------------------------------------------------------------------------- #
+class PlateReader:
+    ALLOW = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    def __init__(self, gpu=False):
+        import easyocr
+        self.reader = easyocr.Reader(["en"], gpu=gpu, verbose=False)
+
+    @staticmethod
+    def _prep(crop):
+        g = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        if g.shape[0] < 120:
+            s = 120 / g.shape[0]
+            g = cv2.resize(g, None, fx=s, fy=s, interpolation=cv2.INTER_CUBIC)
+        g = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(g)
+        return cv2.GaussianBlur(g, (3, 3), 0)
+
+    def read(self, crop):
+        img = self._prep(crop)
+        results = self.reader.readtext(img, allowlist=self.ALLOW, detail=1)
+        if not results:
+            return "", 0.0
+        h = img.shape[0]
+        # order: top line first, then left-to-right (handles 2-line plates)
+        def key(r):
+            pts = np.array(r[0])
+            return (int(pts[:, 1].mean() > h / 2), pts[:, 0].min())
+        results.sort(key=key)
+        text = clean_text("".join(r[1] for r in results))
+        conf = float(np.mean([r[2] for r in results]))
+        return text, conf
+
+
+# --------------------------------------------------------------------------- #
+# Storage
+# --------------------------------------------------------------------------- #
+class PlateStore:
+    def __init__(self, db_path="plates.db", img_dir="plate_images"):
+        self.img_dir = Path(img_dir)
+        self.img_dir.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(db_path)
+        self.conn.execute(
+            """CREATE TABLE IF NOT EXISTS detections (
+                   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                   plate      TEXT NOT NULL,
+                   confidence REAL,
+                   valid      INTEGER,
+                   timestamp  TEXT NOT NULL,
+                   source     TEXT,
+                   image_path TEXT)"""
+        )
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_plate ON detections(plate)")
+        self.conn.commit()
+
+    def save(self, plate, conf, crop, source, valid):
+        ts = datetime.now()
+        path = self.img_dir / f"{plate}_{ts:%Y%m%d_%H%M%S_%f}.jpg"
+        cv2.imwrite(str(path), crop)
+        self.conn.execute(
+            "INSERT INTO detections(plate, confidence, valid, timestamp, source, image_path)"
+            " VALUES (?,?,?,?,?,?)",
+            (plate, round(conf, 3), int(valid), ts.isoformat(timespec="seconds"),
+             str(source), str(path)),
+        )
+        self.conn.commit()
+
+    def search(self, term):
+        cur = self.conn.execute(
+            "SELECT id, plate, confidence, timestamp, source FROM detections"
+            " WHERE plate LIKE ? ORDER BY id DESC", (f"%{term.upper()}%",))
+        return cur.fetchall()
+
+    def export_csv(self, out):
+        cur = self.conn.execute("SELECT * FROM detections ORDER BY id")
+        with open(out, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow([d[0] for d in cur.description])
+            w.writerows(cur.fetchall())
+
+    def close(self):
+        self.conn.close()
+
+
+# --------------------------------------------------------------------------- #
+# Pipeline with multi-frame voting and duplicate suppression
+# --------------------------------------------------------------------------- #
+class ANPR:
+    def __init__(self, detector, reader, store, source, validate=True,
+                 min_conf=0.4, min_hits=2, window=60, cooldown=900):
+        self.detector, self.reader, self.store = detector, reader, store
+        self.source, self.validate = source, validate
+        self.min_conf, self.min_hits = min_conf, min_hits
+        self.window, self.cooldown = window, cooldown     # both in frames
+        self.recent = defaultdict(list)    # plate -> [(frame_idx, conf, crop)]
+        self.last_saved = {}               # plate -> frame_idx
+
+    def process(self, frame, idx):
+        annotated = []
+        for (x, y, w, h) in self.detector.detect(frame):
+            crop = frame[y:y + h, x:x + w]
+            if crop.size == 0:
+                continue
+            text, conf = self.reader.read(crop)
+            text = fix_positions(text)
+            ok = is_valid(text)
+            if not text or conf < self.min_conf or (self.validate and not ok):
+                continue
+            annotated.append(((x, y, w, h), text, conf))
+            self._vote(text, conf, crop, idx, ok)
+        return annotated
+
+    def _vote(self, plate, conf, crop, idx, ok):
+        hits = [r for r in self.recent[plate] if idx - r[0] <= self.window]
+        hits.append((idx, conf, crop))
+        self.recent[plate] = hits
+        cooled = idx - self.last_saved.get(plate, -10**9) > self.cooldown
+        if len(hits) >= self.min_hits and cooled:
+            best = max(hits, key=lambda r: r[1])
+            self.store.save(plate, best[1], best[2], self.source, ok)
+            self.last_saved[plate] = idx
+            self.recent[plate] = []
+            log.info("SAVED  %-12s conf=%.2f", plate, best[1])
+
+
+# --------------------------------------------------------------------------- #
+# Main loop
+# --------------------------------------------------------------------------- #
+def run(args):
+    src = int(args.source) if args.source.isdigit() else args.source
+    cap = cv2.VideoCapture(src)
+    if not cap.isOpened():
+        sys.exit(f"Cannot open source: {args.source}")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    log.info("Source opened (%.0f fps). Loading OCR model...", fps)
+
+    store = PlateStore(args.db, args.images)
+    app = ANPR(
+        PlateDetector(args.weights), PlateReader(args.gpu), store, args.source,
+        validate=not args.no_validate, min_conf=args.min_conf,
+        min_hits=args.min_hits, window=int(2 * fps),
+        cooldown=int(args.cooldown * fps),
+    )
+
+    idx = 0
+    try:
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                log.info("Stream ended.")
+                break
+            idx += 1
+            if idx % args.every:
+                continue
+            results = app.process(frame, idx)
+            if args.show:
+                for (x, y, w, h), text, conf in results:
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.putText(frame, f"{text} {conf:.2f}", (x, max(20, y - 8)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.imshow("ANPR", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
+    except KeyboardInterrupt:
+        log.info("Stopped by user.")
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        store.close()
+
+
+def main():
+    p = argparse.ArgumentParser(description="Autonomous number plate detection & storage")
+    p.add_argument("--source", default="0", help="camera index, video file or stream URL")
+    p.add_argument("--db", default="plates.db")
+    p.add_argument("--images", default="plate_images")
+    p.add_argument("--weights", help="optional YOLO plate-detector weights (.pt)")
+    p.add_argument("--every", type=int, default=3, help="process every Nth frame")
+    p.add_argument("--min-conf", type=float, default=0.4)
+    p.add_argument("--min-hits", type=int, default=2,
+                   help="times a plate must be read (within ~2s) before saving")
+    p.add_argument("--cooldown", type=float, default=30,
+                   help="seconds before the same plate can be saved again")
+    p.add_argument("--no-validate", action="store_true",
+                   help="store reads that don't match Indian plate formats")
+    p.add_argument("--gpu", action="store_true")
+    p.add_argument("--show", action="store_true", help="show live preview window")
+    p.add_argument("--search", help="search stored plates and exit")
+    p.add_argument("--export", help="export database to CSV and exit")
+    args = p.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
+                        datefmt="%H:%M:%S")
+
+    if args.search or args.export:
+        store = PlateStore(args.db, args.images)
+        if args.search:
+            for row in store.search(args.search):
+                print(row)
+        if args.export:
+            store.export_csv(args.export)
+            print("Exported to", args.export)
+        store.close()
+        return
+    run(args)
+
+
+if __name__ == "__main__":
+    main()
