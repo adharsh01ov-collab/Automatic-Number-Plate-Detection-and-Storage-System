@@ -775,20 +775,45 @@ The system has been implemented as a Google Colab-based proof of concept. Furthe
 
 ### Input
 
-**[INSERT REAL INPUT SCREENSHOT HERE]**
+<img width="1000" height="514" alt="image5" src="https://github.com/user-attachments/assets/1ea09623-b82f-4351-8083-250355118fba" />
+
+<img width="318" height="159" alt="image6" src="https://github.com/user-attachments/assets/31a84d63-732a-43bd-a533-a456bf8420f3" />
+
 
 ### Plate Detection
 
-**[INSERT REAL DETECTION SCREENSHOT HERE]**
+<img width="1920" height="1080" alt="Screenshot 2026-10-06 201850" src="https://github.com/user-attachments/assets/00052e01-4e17-4f42-be7a-af1d83ca9b69" />
+
+<img width="1920" height="1080" alt="Screenshot 2026-10-06 200442" src="https://github.com/user-attachments/assets/4e3386f5-4d8f-4652-8a27-a0a15ae283ef" />
+
 
 ### OCR Result
 
-**[INSERT REAL OCR SCREENSHOT HERE]**
+Requirement already satisfied: opencv-python in /usr/local/lib/python3.13/dist-packages (5.0.0.93)
+Requirement already satisfied: pytesseract in /usr/local/lib/python3.13/dist-packages (0.3.13)
+Requirement already satisfied: openpyxl in /usr/local/lib/python3.13/dist-packages (3.1.5)
+Requirement already satisfied: pandas in /usr/local/lib/python3.13/dist-packages (2.2.3)
+Requirement already satisfied: numpy>=2 in /usr/local/lib/python3.13/dist-packages (from opencv-python) (2.1.3)
+Requirement already satisfied: packaging>=21.3 in /usr/local/lib/python3.13/dist-packages (from pytesseract) (26.3)
+Requirement already satisfied: Pillow>=8.0.0 in /usr/local/lib/python3.13/dist-packages (from pytesseract) (11.3.0)
+Requirement already satisfied: et-xmlfile in /usr/local/lib/python3.13/dist-packages (from openpyxl) (2.0.0)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.13/dist-packages (from pandas) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.13/dist-packages (from pandas) (2025.2)
+Requirement already satisfied: tzdata>=2022.7 in /usr/local/lib/python3.13/dist-packages (from pandas) (2026.4)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.13/dist-packages (from python-dateutil>=2.8.2->pandas) (1.17.0)
+image5.jpg
+image5.jpg(image/jpeg) - 60891 bytes, last modified: 10/6/2026 - 100% done
+Saving image5.jpg to image5.jpg
+Detected Plate: “HROBAY1229
 
 ### Excel Record
 
-**[INSERT REAL EXCEL SCREENSHOT HERE]**
+[NumberPlateData (1).xlsx](https://github.com/user-attachments/files/33111966/NumberPlateData.1.xlsx)
 
 ### Complete Demonstration
 
-**[INSERT 30–60 SECOND DEMO VIDEO LINK HERE]**
+
+
+https://github.com/user-attachments/assets/ed60d304-1799-4f2c-8048-adef2ceff02f
+
+
